@@ -1,0 +1,19 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Training outputs
+/models/
+/Logs/
+/logs/
+/tensorboard/
+
+# Local dataset artifacts
+/video_data/
+/video_data_zip/
