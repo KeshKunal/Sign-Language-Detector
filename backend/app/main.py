@@ -21,7 +21,22 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 _model: Any = None
+_model_kind: str | None = None
+_model_metadata: dict[str, Any] = {}
 _model_error: str | None = None
+
+
+def _hand_summary(sequence: np.ndarray) -> np.ndarray:
+    """Match the compact SVM feature view used in the nine-class benchmark."""
+    hands = sequence[:, 1536:]
+    return np.concatenate(
+        (
+            hands.mean(axis=0),
+            hands.std(axis=0),
+            hands.max(axis=0) - hands.min(axis=0),
+            np.abs(np.diff(hands, axis=0)).mean(axis=0),
+        )
+    ).astype(np.float32, copy=False)
 
 
 class PredictionRequest(BaseModel):
@@ -40,6 +55,8 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "model_available": MODEL_PATH.is_file(),
         "model_loaded": _model is not None,
+        "model_kind": _model_kind,
+        "model_metadata": _model_metadata,
         "model_error": _model_error,
         "model_path": str(MODEL_PATH),
         "labels": list(ACTIONS),
@@ -51,7 +68,7 @@ def health() -> dict[str, Any]:
 
 @app.post("/api/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest) -> PredictionResponse:
-    global _model, _model_error
+    global _model, _model_kind, _model_error
     if not MODEL_PATH.is_file():
         raise HTTPException(status_code=503, detail="Model weights are unavailable. Train the model first.")
     try:
@@ -64,9 +81,41 @@ def predict(request: PredictionRequest) -> PredictionResponse:
         raise HTTPException(status_code=422, detail="Sequence contains non-finite values.")
     try:
         if _model is None:
-            from tensorflow.keras.models import load_model
-            _model = load_model(MODEL_PATH)
-        probabilities = np.asarray(_model.predict(array[None, ...], verbose=0)[0], dtype=float)
+            if MODEL_PATH.suffix.lower() == ".joblib":
+                import joblib
+
+                artifact = joblib.load(MODEL_PATH)
+                if artifact.get("classes") != list(ACTIONS):
+                    raise ValueError("SVM artifact class mapping does not match configured labels.")
+                _model = artifact["model"]
+                _model_kind = "classical"
+                _model_metadata.update(
+                    {key: artifact[key] for key in ("frames_seen", "view", "feature_mode") if key in artifact}
+                )
+            else:
+                import tensorflow as tf
+
+                # Small CPU thread pools avoid oversubscription on this single-request
+                # local service; MEDISIGN_TF_THREADS=0 preserves TensorFlow defaults.
+                tf_threads = int(os.environ.get("MEDISIGN_TF_THREADS", "1"))
+                if tf_threads > 0:
+                    tf.config.threading.set_intra_op_parallelism_threads(tf_threads)
+                    tf.config.threading.set_inter_op_parallelism_threads(tf_threads)
+                from tensorflow.keras.models import load_model
+
+                _model = load_model(MODEL_PATH)
+                _model_kind = "keras_lstm"
+
+        if _model_kind == "classical":
+            if _model_metadata.get("view") != "hands" or _model_metadata.get("feature_mode") != "summary":
+                raise ValueError("This API currently supports the hand-summary SVM artifact only.")
+            probabilities = np.asarray(_model.predict_proba(_hand_summary(array)[None, :])[0], dtype=float)
+            class_ids = np.asarray(_model.classes_, dtype=int)
+            ordered = np.zeros(len(ACTIONS), dtype=float)
+            ordered[class_ids] = probabilities
+            probabilities = ordered
+        else:
+            probabilities = np.asarray(_model.predict(array[None, ...], verbose=0)[0], dtype=float)
         if probabilities.shape != (len(ACTIONS),) or not np.isfinite(probabilities).all():
             raise ValueError("Model output does not match the configured class mapping.")
         index = int(probabilities.argmax())

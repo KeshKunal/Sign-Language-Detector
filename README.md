@@ -129,7 +129,7 @@ notebooks/                  Existing project walkthrough
 
 ## Troubleshooting
 
-- **Python 3.11 not found:** install Python 3.11 and enable `py.exe`, then rerun `setup.ps1`.
+- **Python 3.11 not found:** the setup requires Python 3.11 because the configured TensorFlow versions do not provide a compatible package for Python 3.14. Install Python 3.11 from python.org, enable `py.exe`, and rerun `setup.ps1`.
 - **Recognition unavailable:** run training and verify `ml/models/sign_language_model.keras` exists. The UI does not invent predictions.
 - **Camera permission denied:** allow access for `localhost` in the browser and in Windows privacy settings, then restart recognition.
 - **Frontend build or MediaPipe files missing:** run `npm install` from `frontend/`; the post-install script stages Holistic runtime assets.

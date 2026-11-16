@@ -29,3 +29,4 @@ __pycache__/
 # Local dataset artifacts
 /video_data/
 /video_data_zip/
+/ml/models/*.joblib

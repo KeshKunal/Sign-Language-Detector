@@ -9,27 +9,21 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  ChevronDown,
-  CircleHelp,
   Clock3,
+  Download,
   FileText,
   Gauge,
   Hand,
   HeartPulse,
   History,
   Info,
-  LayoutDashboard,
   LoaderCircle,
-  Menu,
-  Moon,
   Pause,
   Play,
   Plus,
   RotateCcw,
   ScanFace,
-  Settings2,
   ShieldCheck,
-  Sun,
   Trash2,
   TriangleAlert,
   Video,
@@ -50,6 +44,14 @@ type Prediction = {
   confidence: number;
   scores: Record<string, number>;
 };
+type DemoLog = {
+  id: number;
+  time: string;
+  kind: "frame" | "prediction" | "system";
+  title: string;
+  detail: string;
+  metadata?: Record<string, unknown>;
+};
 type Communication = {
   id: string;
   label: string;
@@ -68,6 +70,7 @@ const defaultLabels = [
   "nausea",
   "trouble breathing",
 ];
+const FEATURES_PER_FRAME = 1662;
 const symptomCopy: Record<string, string> = {
   headache: "Headache",
   "sore throat": "Sore throat",
@@ -79,14 +82,6 @@ const symptomCopy: Record<string, string> = {
   nausea: "Nausea",
   "trouble breathing": "Trouble breathing",
 };
-const storageKey = "medisign-confirmed-communications";
-function readHistory(): Communication[] {
-  try {
-    return JSON.parse(localStorage.getItem(storageKey) || "[]");
-  } catch {
-    return [];
-  }
-}
 function titleCase(value: string) {
   return (
     symptomCopy[value] || value.replace(/\b\w/g, (char) => char.toUpperCase())
@@ -101,11 +96,6 @@ function formatDate(value: string) {
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
-  const [history, setHistory] = useState<Communication[]>(readHistory);
-  const [dark, setDark] = useState(
-    () => localStorage.getItem("medisign-theme") === "dark",
-  );
-  const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   useEffect(() => {
     const controller = new AbortController();
@@ -126,218 +116,79 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [location.pathname]);
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(history));
-  }, [history]);
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("medisign-theme", dark ? "dark" : "light");
-  }, [dark]);
-  const addCommunication = useCallback((prediction: Prediction) => {
-    setHistory((current) => [
-      {
-        id: crypto.randomUUID(),
-        label: prediction.label,
-        confidence: prediction.confidence,
-        createdAt: new Date().toISOString(),
-        note: "",
-      },
-      ...current,
-    ]);
-  }, []);
-  const removeCommunication = useCallback(
-    (id: string) =>
-      setHistory((current) => current.filter((item) => item.id !== id)),
-    [],
-  );
-  const clearHistory = useCallback(() => {
-    if (window.confirm("Clear all confirmed communications from this browser?"))
-      setHistory([]);
-  }, []);
-  const nav = [
-    { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
-    { to: "/recognize", label: "Sign recognition", icon: ScanFace },
-    {
-      to: "/communications",
-      label: "Patient communication",
-      icon: AudioLines,
-      count: history.length,
-    },
-    { to: "/clinical", label: "Clinical view", icon: FileText },
-  ];
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
-        <Link className="brand" to="/" onClick={() => setMenuOpen(false)}>
-          <span className="brand-symbol">
-            <Hand size={20} strokeWidth={2.1} />
-          </span>
-          <span className="brand-word">
-            medi<span>sign</span>
-            <small>CARE COMMUNICATION</small>
-          </span>
+    <div className="simple-app">
+      <header className="simple-header">
+        <Link className="simple-brand" to="/">
+          <span className="simple-brand-mark"><Hand size={20} /></span>
+          <span>MediSign <small>DEMO</small></span>
         </Link>
-        <div className="workspace-picker">
-          <div className="workspace-mark">
-            <HeartPulse size={17} />
-          </div>
-          <span>
-            <strong>Care workspace</strong>
-            <small>Local session</small>
-          </span>
-          <ChevronDown size={15} />
-        </div>
-        <p className="nav-label">WORKSPACE</p>
-        <nav className="side-nav">
-          {nav.map(({ to, label, icon: Icon, end, count }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={() => setMenuOpen(false)}
-              className={({ isActive }) =>
-                `nav-item ${isActive ? "active" : ""}`
-              }
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {count ? <small className="nav-count">{count}</small> : null}
-            </NavLink>
-          ))}
+        <nav className="simple-nav" aria-label="Main navigation">
+          <NavLink to="/" end>Camera</NavLink>
+          <NavLink to="/instructions">Sign guide</NavLink>
         </nav>
-        <p className="nav-label lower-label">INFORMATION</p>
-        <nav className="side-nav">
-          <NavLink
-            to="/dataset"
-            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-          >
-            <Activity size={18} />
-            <span>Model & dataset</span>
-          </NavLink>
-          <NavLink
-            to="/about"
-            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-          >
-            <Info size={18} />
-            <span>About MediSign</span>
-          </NavLink>
-        </nav>
-        <div className="sidebar-spacer" />
-        <div className="local-note">
-          <ShieldCheck size={16} />
-          <span>
-            <strong>Private by design</strong>
-            <small>Communication history stays in this browser.</small>
-          </span>
-        </div>
-        <div className="profile">
-          <div className="avatar">MS</div>
-          <span>
-            <strong>Demo workspace</strong>
-            <small>Local device</small>
-          </span>
-          <Settings2 size={17} />
-        </div>
-      </aside>
-      {menuOpen && (
-        <button
-          className="scrim"
-          aria-label="Close menu"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-      <main className="main-area">
-        <header className="topbar">
-          <button
-            className="mobile-menu icon-button"
-            aria-label="Open menu"
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu size={20} />
-          </button>
-          <div className="breadcrumb">
-            <span>Workspace</span>
-            <span className="crumb-slash">/</span>
-            <strong>
-              {nav.find((item) => item.to === location.pathname)?.label ||
-                (location.pathname === "/clinical"
-                  ? "Clinical view"
-                  : location.pathname
-                      .slice(1)
-                      .replace(/\b\w/g, (m) => m.toUpperCase()))}
-            </strong>
-          </div>
-          <div className="topbar-right">
-            <div
-              className={`connection-pill ${health?.model_available ? "connected" : ""}`}
-            >
-              <span className="status-dot" />
-              {health?.model_available ? "Model ready" : "Model unavailable"}
-            </div>
-            <button
-              className="icon-button theme-toggle"
-              onClick={() => setDark(!dark)}
-              aria-label="Toggle theme"
-            >
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <div className="top-avatar">MS</div>
-          </div>
-        </header>
-        <div className="page-wrap">
-          <Routes>
-            <Route
-              path="/"
-              element={<Dashboard health={health} history={history} />}
-            />
-            <Route
-              path="/recognize"
-              element={
-                <Recognition health={health} onConfirm={addCommunication} />
-              }
-            />
-            <Route
-              path="/communications"
-              element={
-                <Communications
-                  history={history}
-                  onRemove={removeCommunication}
-                  onUpdate={(id, note) =>
-                    setHistory((current) =>
-                      current.map((item) =>
-                        item.id === id ? { ...item, note } : item,
-                      ),
-                    )
-                  }
-                  onClear={clearHistory}
-                />
-              }
-            />
-            <Route
-              path="/clinical"
-              element={<Clinical history={history} health={health} />}
-            />
-            <Route path="/dataset" element={<Dataset health={health} />} />
-            <Route path="/about" element={<About />} />
-            <Route
-              path="*"
-              element={<Dashboard health={health} history={history} />}
-            />
-          </Routes>
-        </div>
-        <footer className="app-footer">
-          <span>
-            <ShieldCheck size={14} /> MediSign supports communication. It does
-            not provide a medical diagnosis.
-          </span>
-          <span>Local-first · ASL symptom vocabulary</span>
-        </footer>
+        <span className={`simple-model-status ${health?.model_available ? "is-ready" : ""}`}>
+          <span className="status-dot" />
+          {health?.model_available ? "Model ready" : "Model offline"}
+        </span>
+      </header>
+      <main className="simple-main">
+        <Routes>
+          <Route path="/" element={<Recognition health={health} />} />
+          <Route path="/instructions" element={<Instructions />} />
+          <Route path="*" element={<Recognition health={health} />} />
+        </Routes>
       </main>
+      <footer className="simple-footer">
+        Demo only · A symptom suggestion is not a medical diagnosis.
+      </footer>
     </div>
   );
 }
 
-function PageHeading({
+function Instructions() {
+  const signs = [
+    ["Headache", "headache.gif"],
+    ["Sore throat", "sore_throat.gif"],
+    ["Cough", "cough.gif"],
+    ["Fever", "fever.gif"],
+    ["Stomach aches", "stomache_aches.gif"],
+    ["Tired", "tired.gif"],
+    ["Runny nose", "runny_nose.gif"],
+    ["Nausea", "nausea.gif"],
+    ["Trouble breathing", "trouble_breathing.gif"],
+  ];
+  return (
+    <section className="guide-page">
+      <div className="guide-heading">
+        <span className="guide-kicker">QUICK GUIDE</span>
+        <h1>Signs in this demo</h1>
+        <p>Watch a sign example, then try it in front of the camera.</p>
+      </div>
+      <div className="guide-note">
+        <Info size={18} />
+        <p>Face the camera with your upper body and hands visible. Sign one symptom at a time, at a comfortable pace, then wait for the result beside the camera.</p>
+      </div>
+      <div className="guide-clips">
+        {signs.map(([label, file]) => (
+          <figure className="guide-clip" key={file}>
+            <img
+              src={`https://sign-language-translator.onrender.com/imgs/${file}`}
+              alt={`${label} sign example`}
+              loading="lazy"
+            />
+            <figcaption>{label}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <p className="guide-source">Animated examples from the <a href="https://sign-language-translator.onrender.com/#instructions" target="_blank" rel="noreferrer">original sign language demo</a>.</p>
+      <Link to="/" className="button button-primary guide-start"><Camera size={17} /> Open camera</Link>
+      <p className="guide-caveat">This is a small demonstration vocabulary. Results can be wrong and should not be used for medical decisions.</p>
+    </section>
+  );
+}
+
+export function PageHeading({
   eyebrow,
   title,
   subtitle,
@@ -359,7 +210,7 @@ function PageHeading({
     </div>
   );
 }
-function Dashboard({
+export function Dashboard({
   health,
   history,
 }: {
@@ -631,13 +482,7 @@ function EmptyState({
   );
 }
 
-function Recognition({
-  health,
-  onConfirm,
-}: {
-  health: Health | null;
-  onConfirm: (prediction: Prediction) => void;
-}) {
+function Recognition({ health }: { health: Health | null }) {
   const videoRef = useRef<HTMLVideoElement>(null),
     canvasRef = useRef<HTMLCanvasElement>(null),
     cameraRef = useRef<MediaStream | null>(null),
@@ -646,6 +491,9 @@ function Recognition({
     busyRef = useRef(false),
     previousVideoTime = useRef(-1),
     frameCount = useRef(0),
+    inferenceCount = useRef(0),
+    sessionId = useRef(0),
+    lastHandFeatures = useRef<number[] | null>(null),
     sequence = useRef<number[][]>([]),
     votes = useRef<Prediction[]>([]);
   const [cameraState, setCameraState] = useState<
@@ -653,15 +501,26 @@ function Recognition({
     >("idle"),
     [cameraError, setCameraError] = useState(""),
     [running, setRunning] = useState(false),
-    [landmarks, setLandmarks] = useState(true),
     [progress, setProgress] = useState(0),
+    [processedFrames, setProcessedFrames] = useState(0),
+    [predictionRuns, setPredictionRuns] = useState(0),
     [prediction, setPrediction] = useState<Prediction | null>(null),
-    [recentPredictions, setRecentPredictions] = useState<Prediction[]>([]),
+    [candidate, setCandidate] = useState<Prediction | null>(null),
+    [processStatus, setProcessStatus] = useState("Waiting to start"),
+    [demoLog, setDemoLog] = useState<DemoLog[]>([]),
+    [expectedLabel, setExpectedLabel] = useState(""),
     [uncertain, setUncertain] = useState(false),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   const threshold = health?.threshold ?? 0.65;
+  const appendLog = useCallback((entry: Omit<DemoLog, "id" | "time">) => {
+    setDemoLog((current) => [
+      { ...entry, id: Date.now() + Math.random(), time: new Date().toLocaleTimeString() },
+      ...current,
+    ].slice(0, 300));
+  }, []);
   const stopCamera = useCallback(() => {
+    sessionId.current += 1;
     cancelAnimationFrame(rafRef.current);
     cameraRef.current?.getTracks().forEach((track) => track.stop());
     cameraRef.current = null;
@@ -670,19 +529,30 @@ function Recognition({
     holisticRef.current = null;
     setRunning(false);
     setCameraState("idle");
-  }, []);
+    busyRef.current = false;
+    setBusy(false);
+    setProcessStatus("Camera stopped. Session log remains available until cleared.");
+    appendLog({ kind: "system", title: "Camera stopped", detail: "No new frames are being captured." });
+  }, [appendLog]);
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (canvas)
       canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
   const reset = useCallback(() => {
+    sessionId.current += 1;
     sequence.current = [];
     votes.current = [];
     frameCount.current = 0;
+    inferenceCount.current = 0;
+    lastHandFeatures.current = null;
     setProgress(0);
+    setProcessedFrames(0);
+    setPredictionRuns(0);
     setPrediction(null);
-    setRecentPredictions([]);
+    setCandidate(null);
+    setDemoLog([]);
+    setProcessStatus("Waiting to start");
     setUncertain(false);
     setNotice("");
     setBusy(false);
@@ -690,9 +560,11 @@ function Recognition({
     clearCanvas();
   }, [clearCanvas]);
   const infer = useCallback(
-    async (frames: number[][]) => {
+    async (frames: number[][], sourceFrame: number, currentSession: number) => {
       busyRef.current = true;
       setBusy(true);
+      setProcessStatus("Sending the latest 30-frame window to the model…");
+      const startedAt = performance.now();
       try {
         const response = await fetch("http://127.0.0.1:8000/api/predict", {
           method: "POST",
@@ -704,7 +576,11 @@ function Recognition({
           throw new Error(body.detail || "Model inference failed.");
         }
         const result = (await response.json()) as Prediction;
-        setRecentPredictions((current) => [result, ...current].slice(0, 4));
+        if (currentSession !== sessionId.current) return;
+        const elapsed = performance.now() - startedAt;
+        inferenceCount.current += 1;
+        setPredictionRuns(inferenceCount.current);
+        setCandidate(result);
         votes.current = [...votes.current, result].slice(-5);
         const counts = new Map<string, Prediction[]>();
         votes.current.forEach((item) =>
@@ -720,20 +596,50 @@ function Recognition({
           setPrediction(stable[stable.length - 1]);
           setUncertain(false);
           setNotice("");
+          setProcessStatus(`Stable result: ${titleCase(stable[stable.length - 1].label)} (${stable.length}/5 recent predictions agree).`);
         } else if (result.confidence < threshold && votes.current.length >= 3) {
           setPrediction(null);
           setUncertain(true);
+          setProcessStatus("Low confidence. Waiting for a clearer or more consistent sign.");
+        } else {
+          setProcessStatus(`Checking consistency: ${titleCase(result.label)} is the current guess (${stable.length}/5 agree).`);
         }
+        const topScores = Object.entries(result.scores)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([label, score]) => `${titleCase(label)} ${Math.round(score * 100)}%`)
+          .join(" · ");
+        appendLog({
+          kind: "prediction",
+          title: `Prediction ${inferenceCount.current} · frame ${sourceFrame}`,
+          detail: `${topScores} · ${elapsed.toFixed(0)} ms round trip${stable.length >= 3 ? ` · ${stable.length}/5 agree` : ""}`,
+          metadata: {
+            prediction_number: inferenceCount.current,
+            source_frame: sourceFrame,
+            window_start_frame: Math.max(1, sourceFrame - 29),
+            window_end_frame: sourceFrame,
+            top_scores: Object.fromEntries(Object.entries(result.scores).sort((a, b) => b[1] - a[1]).slice(0, 3)),
+            confidence: result.confidence,
+            request_round_trip_ms: Number(elapsed.toFixed(2)),
+            agreement_label: stable[0]?.label ?? null,
+            agreement_count: stable.length,
+            confidence_threshold: threshold,
+          },
+        });
       } catch (error) {
-        setNotice(
-          error instanceof Error ? error.message : "Could not run inference.",
-        );
+        if (currentSession !== sessionId.current) return;
+        const message = error instanceof Error ? error.message : "Could not run inference.";
+        setNotice(message);
+        setProcessStatus("Prediction request failed. Check that the local model service is running.");
+        appendLog({ kind: "system", title: "Prediction error", detail: message });
       } finally {
-        busyRef.current = false;
-        setBusy(false);
+        if (currentSession === sessionId.current) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     },
-    [threshold],
+    [appendLog, threshold],
   );
   const start = useCallback(async () => {
     if (!health?.model_available) {
@@ -753,6 +659,7 @@ function Recognition({
     setCameraError("");
     setNotice("");
     reset();
+    setProcessStatus("Requesting camera and loading the landmark detector…");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -778,27 +685,83 @@ function Recognition({
         minTrackingConfidence: 0.5,
       });
       model.onResults((result: any) => {
+        const finiteValue = (value: unknown) =>
+          typeof value === "number" && Number.isFinite(value) ? value : 0;
         const pointValues = (
           points: any[] | undefined,
           count: number,
           visibility: boolean,
-        ) =>
-          points?.length
-            ? points.flatMap((point: any) =>
-                visibility
-                  ? [point.x, point.y, point.z, point.visibility ?? 0]
-                  : [point.x, point.y, point.z],
-              )
-            : Array(count).fill(0);
+        ) => {
+          const dimensions = visibility ? 4 : 3;
+          if (!points?.length) return Array(count * dimensions).fill(0);
+          return points.flatMap((point: any) =>
+            visibility
+              ? [finiteValue(point.x), finiteValue(point.y), finiteValue(point.z), finiteValue(point.visibility ?? 0)]
+              : [finiteValue(point.x), finiteValue(point.y), finiteValue(point.z)],
+          );
+        };
         const features = [
           ...pointValues(result.poseLandmarks, 33, true),
           ...pointValues(result.faceLandmarks, 468, false),
           ...pointValues(result.leftHandLandmarks, 21, false),
           ...pointValues(result.rightHandLandmarks, 21, false),
         ];
+        if (features.length !== FEATURES_PER_FRAME) {
+          setProcessStatus(`Frame rejected: expected ${FEATURES_PER_FRAME} values, got ${features.length}.`);
+          appendLog({
+            kind: "system",
+            title: `Frame ${frameCount.current + 1} rejected`,
+            detail: `Landmark feature length was ${features.length}; expected ${FEATURES_PER_FRAME}. No prediction was sent.`,
+            metadata: { feature_count: features.length, expected_feature_count: FEATURES_PER_FRAME },
+          });
+          return;
+        }
         sequence.current = [...sequence.current, features].slice(-30);
-        setProgress(sequence.current.length);
         frameCount.current += 1;
+        const frameNumber = frameCount.current;
+        if (frameNumber <= 30 || frameNumber % 5 === 0) {
+          setProgress(sequence.current.length);
+          setProcessedFrames(frameNumber);
+          if (!busyRef.current) {
+            setProcessStatus(
+              sequence.current.length < 30
+                ? `Capturing warm-up window: ${sequence.current.length}/30 frames.`
+                : `Live capture · frame ${frameNumber} · updating the rolling window.`,
+            );
+          }
+        }
+        const leftHand = result.leftHandLandmarks;
+        const rightHand = result.rightHandLandmarks;
+        const handFeatures = features.slice(1536);
+        const handsVisible = Boolean(leftHand?.length || rightHand?.length);
+        const motion = handsVisible && lastHandFeatures.current
+          ? handFeatures.reduce((sum, value, index) => sum + Math.abs(value - lastHandFeatures.current![index]), 0) / handFeatures.length
+          : null;
+        lastHandFeatures.current = handFeatures;
+        if (frameNumber % 5 === 0) {
+          const visible = [
+            result.poseLandmarks?.length ? "upper body" : null,
+            result.faceLandmarks?.length ? "face" : null,
+            leftHand?.length ? "left hand" : null,
+            rightHand?.length ? "right hand" : null,
+          ].filter(Boolean);
+          appendLog({
+            kind: "frame",
+            title: `Frame ${frameNumber} captured`,
+            detail: `${visible.length ? visible.join(" · ") : "No landmarks detected"}${motion === null ? "" : ` · hand movement ${motion.toFixed(3)}`}`,
+            metadata: {
+              frame_number: frameNumber,
+              pose_detected: Boolean(result.poseLandmarks?.length),
+              face_detected: Boolean(result.faceLandmarks?.length),
+              left_hand_detected: Boolean(leftHand?.length),
+              right_hand_detected: Boolean(rightHand?.length),
+              feature_count: features.length,
+              finite_features: features.every(Number.isFinite),
+              mean_hand_coordinate_change: motion,
+              rolling_window_frames: sequence.current.length,
+            },
+          });
+        }
         const canvas = canvasRef.current,
           video = videoRef.current;
         if (canvas && video) {
@@ -806,7 +769,7 @@ function Recognition({
           canvas.height = video.videoHeight;
           const ctx = canvas.getContext("2d");
           ctx?.clearRect(0, 0, canvas.width, canvas.height);
-          if (landmarks && ctx) {
+          if (ctx) {
             const drawPoints = (points: any[] | undefined, color: string) =>
               points?.forEach((point: any) => {
                 ctx.beginPath();
@@ -836,11 +799,13 @@ function Recognition({
           frameCount.current % 10 === 0 &&
           !busyRef.current
         )
-          void infer(sequence.current);
+          void infer([...sequence.current], frameNumber, sessionId.current);
       });
       holisticRef.current = model;
       setCameraState("ready");
       setRunning(true);
+      setProcessStatus("Landmark detector ready. Capturing the first 30 frames…");
+      appendLog({ kind: "system", title: "Camera started", detail: "Processing happens in this browser; camera video is not saved." });
       const tick = async () => {
         const video = videoRef.current;
         if (!video || !cameraRef.current) return;
@@ -872,7 +837,7 @@ function Recognition({
           : "Could not start the camera. Check browser permissions and network access for the landmark model.",
       );
     }
-  }, [health?.model_available, infer, landmarks, reset]);
+  }, [appendLog, health?.model_available, infer, reset]);
   const togglePause = useCallback(() => {
     if (!cameraRef.current) return;
     const next = !running;
@@ -881,9 +846,13 @@ function Recognition({
     });
     setRunning(next);
     if (!next) {
+      setProcessStatus("Capture paused. Resume to continue live predictions.");
+      appendLog({ kind: "system", title: "Capture paused", detail: "The current prediction log is kept for this session." });
       cancelAnimationFrame(rafRef.current);
       return;
     }
+    setProcessStatus("Capture resumed. Updating the rolling window…");
+    appendLog({ kind: "system", title: "Capture resumed", detail: "New frames will be analyzed continuously." });
     const tick = async () => {
       const video = videoRef.current;
       if (
@@ -910,7 +879,27 @@ function Recognition({
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, [running]);
+  }, [appendLog, running]);
+  const downloadLog = useCallback(() => {
+    const payload = {
+      project: "MediSign ASL symptom demo",
+      expected_sign: expectedLabel || null,
+      exported_at: new Date().toISOString(),
+      settings: {
+        rolling_window_frames: 30,
+        prediction_interval_frames: 10,
+        confidence_threshold: threshold,
+      },
+      note: "Frame entries contain landmark-presence metadata only. Camera images and raw landmark arrays are not included.",
+      entries: demoLog,
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `medisign-session-${new Date().toISOString().replace(/:/g, "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [demoLog, expectedLabel, threshold]);
   useEffect(
     () => () => {
       cancelAnimationFrame(rafRef.current);
@@ -919,49 +908,30 @@ function Recognition({
     },
     [],
   );
-  const confirm = () => {
-    if (prediction) {
-      onConfirm(prediction);
-      setPrediction(null);
-      votes.current = [];
-      sequence.current = [];
-      frameCount.current = 0;
-      setProgress(0);
-      setUncertain(false);
-      setNotice("Message confirmed and added to patient communication.");
-    }
-  };
   return (
-    <>
-      <PageHeading
-        eyebrow="LIVE ASL RECOGNITION"
-        title="Let the patient lead."
-        subtitle="A live sign becomes a possible symptom. The patient decides what gets shared."
-        action={
-          <div className="privacy-chip">
-            <ShieldCheck size={15} /> Camera stays on this device
-          </div>
-        }
-      />
+    <section className="demo-page">
+      <div className="demo-heading">
+        <div>
+          <span className="guide-kicker">LIVE CAMERA DEMO</span>
+          <h1>Show a symptom sign</h1>
+          <p>Start the camera, sign one symptom, and see the model’s suggestion.</p>
+        </div>
+        <Link className="demo-guide-link" to="/instructions"><BookOpen size={16} /> Sign guide</Link>
+      </div>
       {!health?.model_available && (
-        <div className="inline-alert warning-alert">
+        <div className="simple-alert">
           <TriangleAlert size={17} />
           <span>
-            <strong>Recognition model is not available.</strong> Train the
-            original LSTM model to enable live recognition. No predictions are
-            simulated.
+            <strong>Model not available.</strong> Start the local API with the trained model to enable recognition.
           </span>
-          <Link to="/dataset">
-            Model details <ArrowRight size={14} />
-          </Link>
         </div>
       )}
       <div className="recognition-layout">
         <section className="panel camera-panel">
           <div className="panel-heading camera-panel-heading">
             <div>
-              <h3>Camera preview</h3>
-              <p>Position hands and upper body in frame.</p>
+              <h3>Camera</h3>
+              <p>Keep your face, hands, and upper body in view.</p>
             </div>
             <span
               className={`camera-status ${cameraState === "ready" ? "camera-live" : ""}`}
@@ -982,9 +952,7 @@ function Recognition({
             <video ref={videoRef} autoPlay muted playsInline />
             <canvas
               ref={canvasRef}
-              className={
-                landmarks ? "landmark-canvas" : "landmark-canvas hidden"
-              }
+              className="landmark-canvas"
             />
             {cameraState !== "ready" && (
               <div className="camera-placeholder">
@@ -1023,18 +991,7 @@ function Recognition({
             )}
           </div>
           <div className="camera-toolbar">
-            <label className="toggle-control">
-              <input
-                type="checkbox"
-                checked={landmarks}
-                onChange={(event) => setLandmarks(event.target.checked)}
-              />
-              <span className="toggle-track" />
-              <span>Show landmarks</span>
-            </label>
-            <span className="toolbar-note">
-              <ShieldCheck size={14} /> No video stored
-            </span>
+            <span className="toolbar-note"><ShieldCheck size={14} /> Camera video is not saved</span>
           </div>
           {cameraState === "error" && (
             <div className="camera-error">
@@ -1078,10 +1035,10 @@ function Recognition({
             )}
             <div className="sequence-progress">
               <div className="progress-label">
-                <span>Sequence collection</span>
+                <span>Rolling frame window</span>
                 <strong>
                   {progress}
-                  <small> / 30 frames</small>
+                  <small> / 30 · {processedFrames} captured</small>
                 </strong>
               </div>
               <div className="progress-track">
@@ -1096,16 +1053,30 @@ function Recognition({
           >
             <div className="panel-heading">
               <div>
-                <h3>Possible symptom</h3>
-                <p>Patient confirmation is required.</p>
+                <h3>Detected symptom</h3>
+                <p>{prediction ? "Most recent stable model result" : "Waiting for a stable model result"}</p>
               </div>
               <span className="result-icon">
                 <ScanFace size={18} />
               </span>
             </div>
+            <div className={`process-status ${busy ? "is-working" : ""}`} role="status" aria-live="polite">
+              <span className="process-status-dot" />
+              <div>
+                <strong>{busy ? "Predicting now" : "What the system is doing"}</strong>
+                <p>{processStatus}</p>
+                <small>{processedFrames} frames processed · {predictionRuns} model checks · checks about every 10 frames when ready</small>
+              </div>
+            </div>
+            {candidate && (
+              <div className="live-candidate">
+                <span>Latest window guess</span>
+                <strong>{titleCase(candidate.label)}</strong>
+                <b>{Math.round(candidate.confidence * 100)}%</b>
+              </div>
+            )}
             {prediction ? (
               <>
-                <span className="result-label">MODEL SUGGESTION</span>
                 <h2 className="result-symptom">
                   {titleCase(prediction.label)}
                 </h2>
@@ -1116,34 +1087,8 @@ function Recognition({
                 <div className="confidence-track">
                   <div style={{ width: `${prediction.confidence * 100}%` }} />
                 </div>
-                <p className="confidence-note">
-                  <Info size={14} /> This score is not a medically validated
-                  probability.
-                </p>
-                <div className="result-actions">
-                  <button className="button button-confirm" onClick={confirm}>
-                    <Check size={16} /> Confirm symptom
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => {
-                      setPrediction(null);
-                      votes.current = [];
-                      sequence.current = [];
-                      frameCount.current = 0;
-                      setProgress(0);
-                      setUncertain(false);
-                      setNotice(
-                        "Suggestion rejected. Continue signing when ready.",
-                      );
-                    }}
-                  >
-                    <X size={16} /> Reject
-                  </button>
-                  <button className="button button-quiet" onClick={reset}>
-                    <RotateCcw size={15} /> Try again
-                  </button>
-                </div>
+                <p className="confidence-note"><Info size={14} /> Demo estimate only; it may be incorrect.</p>
+                <button className="button button-secondary result-retry" onClick={reset}><RotateCcw size={15} /> Clear result</button>
               </>
             ) : (
               <div className="result-empty">
@@ -1161,7 +1106,7 @@ function Recognition({
                     : busy
                       ? "Reviewing sign…"
                       : cameraState === "ready"
-                        ? "Listening for a sign"
+                          ? "Listening for a sign"
                         : "Ready when you are"}
                 </strong>
                 <p>
@@ -1171,7 +1116,7 @@ function Recognition({
                       ? "A complete sequence is being checked by the local model."
                       : cameraState === "ready"
                         ? "Sign a supported symptom and hold it in frame."
-                        : "Start camera to begin a patient-led communication."}
+                        : "Start camera to begin."}
                 </p>
               </div>
             )}
@@ -1190,64 +1135,38 @@ function Recognition({
               </div>
             )}
           </section>
-          <section className="panel steps-panel">
-            <div className="panel-heading">
+          <section className="panel session-log" aria-label="Recent session activity">
+            <div className="session-log-heading">
               <div>
-                <h3>How it works</h3>
-                <p>Recognition is a suggestion, not a decision.</p>
+                <h3>Recent activity</h3>
+                <p>Latest predictions and session updates.</p>
               </div>
-              <CircleHelp size={17} className="subtle-icon" />
-            </div>
-            <div className="step-list">
-              <Step
-                number="01"
-                title="Sign naturally"
-                text="Show the symptom sign in your own time."
-                active={cameraState === "ready"}
-              />
-              <Step
-                number="02"
-                title="Review suggestion"
-                text="The model shares a possible sign and score."
-                active={Boolean(prediction)}
-              />
-              <Step
-                number="03"
-                title="Patient confirms"
-                text="Only confirmed messages reach the history."
-                active={false}
-              />
-            </div>
-          </section>
-          <section className="panel prediction-list-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Recent model outputs</h3>
-                <p>Suggestions remain unconfirmed until the patient agrees.</p>
+              <div className="session-log-actions">
+                <label className="expected-sign-picker">Test sign
+                  <select value={expectedLabel} onChange={(event) => setExpectedLabel(event.target.value)}>
+                    <option value="">Choose label</option>
+                    {defaultLabels.map((label) => <option key={label} value={label}>{titleCase(label)}</option>)}
+                  </select>
+                </label>
+                <button className="button button-secondary log-clear" onClick={downloadLog} disabled={!demoLog.length} aria-label="Export complete session log">
+                  <Download size={14} /> Export
+                </button>
+                <button className="button button-secondary log-clear" onClick={() => setDemoLog([])} disabled={!demoLog.length} aria-label="Clear session log">
+                  <Trash2 size={14} /> Clear
+                </button>
               </div>
-              <History size={16} className="subtle-icon" />
             </div>
-            {recentPredictions.length ? (
-              <div className="prediction-list">
-                {recentPredictions.map((item, index) => (
-                  <div
-                    className="prediction-row"
-                    key={`${item.label}-${index}`}
-                  >
-                    <span className="prediction-row-icon">
-                      <ScanFace size={14} />
-                    </span>
-                    <strong>{titleCase(item.label)}</strong>
-                    <span>{Math.round(item.confidence * 100)}%</span>
-                    <small>Suggestion</small>
-                  </div>
+            {demoLog.filter((entry) => entry.kind !== "frame").length ? (
+              <ol className="session-log-list" aria-live="polite">
+                {demoLog.filter((entry) => entry.kind !== "frame").slice(0, 8).map((entry) => (
+                  <li key={entry.id} className={`session-log-entry log-${entry.kind}`}>
+                    <time>{entry.time}</time>
+                    <div><strong>{entry.title}</strong><p>{entry.detail}</p></div>
+                  </li>
                 ))}
-              </div>
+              </ol>
             ) : (
-              <p className="prediction-list-empty">
-                Model suggestions will appear after a complete 30-frame
-                sequence.
-              </p>
+              <p className="session-log-empty">Predictions and session updates will appear here.</p>
             )}
           </section>
         </div>
@@ -1259,10 +1178,10 @@ function Recognition({
           and cannot replace professional medical assessment.
         </span>
       </div>
-    </>
+    </section>
   );
 }
-function Step({
+export function Step({
   number,
   title,
   text,
@@ -1286,7 +1205,7 @@ function Step({
   );
 }
 
-function Communications({
+export function Communications({
   history,
   onRemove,
   onUpdate,
@@ -1469,7 +1388,7 @@ function Communications({
     </>
   );
 }
-function Clinical({
+export function Clinical({
   history,
   health,
 }: {
@@ -1578,7 +1497,7 @@ function Clinical({
     </>
   );
 }
-function Dataset({ health }: { health: Health | null }) {
+export function Dataset({ health }: { health: Health | null }) {
   const labels = health?.labels?.length ? health.labels : defaultLabels;
   return (
     <>
@@ -1805,7 +1724,7 @@ function Limitation({ title, text }: { title: string; text: string }) {
     </div>
   );
 }
-function About() {
+export function About() {
   return (
     <>
       <PageHeading

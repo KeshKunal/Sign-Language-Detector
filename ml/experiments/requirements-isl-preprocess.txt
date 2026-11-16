@@ -1,0 +1,3 @@
+# Isolated preprocessing environment; MediaPipe Solutions is used by the feature extractor.
+mediapipe==0.10.21
+opencv-contrib-python>=4.9,<4.12

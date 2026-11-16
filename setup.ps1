@@ -3,17 +3,32 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 Write-Host 'MediSign local setup' -ForegroundColor Cyan
 
+$pythonCommand = $null
 $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
-if (-not $pythonLauncher) { throw 'Python launcher (py.exe) is required. Install Python 3.11 from python.org.' }
-& py -3.11 --version
-if ($LASTEXITCODE -ne 0) { throw 'Python 3.11 was not found. Install Python 3.11 and rerun setup.' }
+if ($pythonLauncher) {
+  try { $pythonCommand = (& py -3.11 -c 'import sys; print(sys.executable)' 2>$null | Select-Object -Last 1) }
+  catch { $pythonCommand = $null }
+}
+if (-not $pythonCommand) {
+  $python = Get-Command python -ErrorAction SilentlyContinue
+  if ($python) {
+    $pythonVersion = (& $python.Source --version 2>&1 | Select-Object -Last 1)
+    if ($pythonVersion -match '^Python 3\.11\.') { $pythonCommand = $python.Source }
+  }
+}
+if (-not $pythonCommand) {
+  $detectedVersion = 'no Python command'
+  try { $detectedVersion = (& python --version 2>&1 | Select-Object -Last 1) } catch {}
+  throw "Python 3.11 is required for TensorFlow compatibility, but it was not found. Detected: $detectedVersion. Install Python 3.11 from python.org, ensure the Python launcher is enabled, and rerun setup."
+}
+Write-Host "Python: $(& $pythonCommand --version)"
 $node = Get-Command node -ErrorAction SilentlyContinue
 $npm = Get-Command npm -ErrorAction SilentlyContinue
 if (-not $node -or -not $npm) { throw 'Node.js 20 or newer and npm are required. Install Node.js and rerun setup.' }
 Write-Host "Node: $(& node --version)   npm: $(& npm --version)"
 
 $venvPython = Join-Path $projectRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path $venvPython)) { & py -3.11 -m venv (Join-Path $projectRoot '.venv') }
+if (-not (Test-Path $venvPython)) { & $pythonCommand -m venv (Join-Path $projectRoot '.venv') }
 & $venvPython -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw 'Could not upgrade pip.' }
 & $venvPython -m pip install -r (Join-Path $projectRoot 'backend\requirements.txt')
